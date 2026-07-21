@@ -5,7 +5,10 @@ import plotly.express as px
 from config.estados import ESTADOS, CORTE_PADRAO, detectar_estado, detectar_tipo
 from src.etl import ler_excel, montar_snapshot
 from src import metricas
-from src.formato import fmt_moeda, fmt_peso, fmt_num, fmt_pct, formatar_tabela, estilizar_tabela_estado, estilizar_tabela_zebra
+from src.formato import (
+    fmt_moeda, fmt_peso, fmt_num, fmt_pct, formatar_tabela,
+    estilizar_tabela_estado, estilizar_tabela_zebra, legenda_cores_estado,
+)
 
 st.set_page_config(page_title="Liberados x Montados", layout="wide")
 
@@ -141,20 +144,31 @@ if arquivos_liberados or arquivos_montados:
     )
 
     with tab1:
-        st.markdown("**Montados x Liberados x Total, por estado**")
-        for estado in tabela_estado["estado"].unique():
-            bloco = tabela_estado[tabela_estado["estado"] == estado].drop(columns="estado")
-            bloco_fmt = formatar_tabela(
-                bloco, colunas_moeda=["valor"], colunas_peso=["peso"], colunas_num=["pedidos"],
-            )
-            st.markdown(
-                f"<div style='background:#2f9e5c; color:white; padding:6px 12px; "
-                f"border-radius:6px; font-weight:600; margin-top:14px; margin-bottom:4px;'>"
-                f"{ESTADOS.get(estado, estado)} ({estado})</div>",
-                unsafe_allow_html=True,
-            )
-            st.dataframe(estilizar_tabela_estado(bloco_fmt), use_container_width=True, hide_index=True)
+        st.markdown("### 📊 Montados x Liberados x Total, por estado")
+        st.markdown(legenda_cores_estado(), unsafe_allow_html=True)
 
+        estados_lista = list(tabela_estado["estado"].unique())
+        for i in range(0, len(estados_lista), 2):
+            par = estados_lista[i:i + 2]
+            colunas_grid = st.columns(len(par))
+            for col, estado in zip(colunas_grid, par):
+                with col:
+                    bloco = tabela_estado[tabela_estado["estado"] == estado].drop(columns="estado")
+                    bloco_fmt = formatar_tabela(
+                        bloco, colunas_moeda=["valor"], colunas_peso=["peso"], colunas_num=["pedidos"],
+                    )
+                    st.markdown(
+                        f"<div style='background:#2f9e5c; color:white; padding:8px 12px; "
+                        f"border-radius:6px 6px 0 0; font-weight:700; text-align:center; "
+                        f"font-size:15px;'>{ESTADOS.get(estado, estado)} ({estado})</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.dataframe(
+                        estilizar_tabela_estado(bloco_fmt),
+                        use_container_width=True, hide_index=True,
+                    )
+
+        st.markdown("<br>", unsafe_allow_html=True)
         fig = px.bar(
             comparativo.melt(
                 id_vars="estado",
