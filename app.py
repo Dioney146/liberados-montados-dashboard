@@ -5,6 +5,7 @@ import plotly.express as px
 from config.estados import ESTADOS, CORTE_PADRAO, detectar_estado, detectar_tipo
 from src.etl import ler_excel, montar_snapshot
 from src import metricas
+from src.formato import fmt_moeda, fmt_peso, fmt_num, fmt_pct, formatar_tabela
 
 st.set_page_config(page_title="Liberados x Montados", layout="wide")
 
@@ -117,24 +118,39 @@ if arquivos_liberados or arquivos_montados:
     comparativo = metricas.comparativo_por_estado(df_lib, df_mont)
 
     st.subheader("2. Panorama deste snapshot")
+
+    st.markdown("**Pendentes (liberados que ainda não foram montados)**")
+    p1, p2, p3 = st.columns(3)
+    p1.metric("Pedidos pendentes", fmt_num(comparativo["pedidos_liberados"].sum()))
+    p2.metric("Peso pendente", fmt_peso(comparativo["peso_liberado"].sum()))
+    p3.metric("Valor pendente", fmt_moeda(comparativo["valor_liberado"].sum()))
+
+    st.markdown("**Montados e indicadores gerais**")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Pedidos liberados (pendentes)", int(comparativo["pedidos_liberados"].sum()))
-    c2.metric("Pedidos montados", int(comparativo["pedidos_montados"].sum()))
+    c1.metric("Pedidos montados", fmt_num(comparativo["pedidos_montados"].sum()))
+    c2.metric("Valor montado", fmt_moeda(comparativo["valor_montado"].sum()))
     atrasados = (df_lib_corte["status_corte"] == "atrasado").sum() if not df_lib_corte.empty else 0
-    c3.metric("Liberados atrasados (passou do corte)", int(atrasados))
+    c3.metric("Liberados atrasados (passou do corte)", fmt_num(atrasados))
     pct_geral = (
         comparativo["pedidos_montados"].sum()
         / max(comparativo["pedidos_montados"].sum() + comparativo["pedidos_liberados"].sum(), 1)
         * 100
     )
-    c4.metric("% já montado (geral)", f"{pct_geral:.1f}%")
+    c4.metric("% já montado (geral)", fmt_pct(pct_geral))
 
     tab1, tab2, tab3, tab4 = st.tabs(
         ["Comparativo por estado", "Aging dos pendentes", "Status de corte", "Histórico do dia"]
     )
 
     with tab1:
-        st.dataframe(comparativo, use_container_width=True)
+        comparativo_fmt = formatar_tabela(
+            comparativo,
+            colunas_moeda=["valor_liberado", "valor_montado"],
+            colunas_peso=["peso_liberado", "peso_montado"],
+            colunas_num=["pedidos_liberados", "pedidos_montados"],
+            colunas_pct=["pct_montado"],
+        )
+        st.dataframe(comparativo_fmt, use_container_width=True)
         fig = px.bar(
             comparativo.melt(
                 id_vars="estado",
@@ -157,12 +173,15 @@ if arquivos_liberados or arquivos_montados:
                 category_orders={"faixa_aging": ["0-2h", "2-6h", "6-12h", "12-24h", "24h+", "sem data"]},
             )
             st.plotly_chart(fig2, use_container_width=True)
-            st.dataframe(
-                df_lib_aging[["numero_pedido", "estado", "cliente", "cidade",
-                               "data_hora_liberacao", "idade_horas", "faixa_aging"]]
-                .sort_values("idade_horas", ascending=False),
-                use_container_width=True,
+            tabela_aging = df_lib_aging[[
+                "numero_pedido", "estado", "cliente", "cidade", "data_hora_liberacao",
+                "idade_horas", "faixa_aging", "peso", "valor",
+            ]].sort_values("idade_horas", ascending=False)
+            tabela_aging = formatar_tabela(
+                tabela_aging, colunas_moeda=["valor"], colunas_peso=["peso"],
             )
+            tabela_aging["idade_horas"] = tabela_aging["idade_horas"].round(1)
+            st.dataframe(tabela_aging, use_container_width=True)
 
     with tab3:
         if df_lib_corte.empty:
@@ -173,11 +192,15 @@ if arquivos_liberados or arquivos_montados:
                 title="Status de corte por estado",
             )
             st.plotly_chart(fig3, use_container_width=True)
-            st.dataframe(
-                df_lib_corte[df_lib_corte["status_corte"] == "atrasado"]
-                [["numero_pedido", "estado", "cliente", "cidade", "data_hora_liberacao", "idade_horas"]],
-                use_container_width=True,
+            tabela_atrasados = df_lib_corte[df_lib_corte["status_corte"] == "atrasado"][[
+                "numero_pedido", "estado", "cliente", "cidade", "data_hora_liberacao",
+                "idade_horas", "peso", "valor",
+            ]]
+            tabela_atrasados = formatar_tabela(
+                tabela_atrasados, colunas_moeda=["valor"], colunas_peso=["peso"],
             )
+            tabela_atrasados["idade_horas"] = tabela_atrasados["idade_horas"].round(1)
+            st.dataframe(tabela_atrasados, use_container_width=True)
 
     with tab4:
         if GSHEETS_OK:
@@ -196,7 +219,14 @@ if arquivos_liberados or arquivos_montados:
                     markers=True,
                 )
                 st.plotly_chart(fig4, use_container_width=True)
-                st.dataframe(historico.sort_values("timestamp", ascending=False), use_container_width=True)
+                historico_fmt = formatar_tabela(
+                    historico.sort_values("timestamp", ascending=False),
+                    colunas_moeda=["valor_liberado", "valor_montado"],
+                    colunas_peso=["peso_liberado", "peso_montado"],
+                    colunas_num=["pedidos_liberados", "pedidos_montados"],
+                    colunas_pct=["pct_montado"],
+                )
+                st.dataframe(historico_fmt, use_container_width=True)
         else:
             st.info("Configure o Google Sheets (veja o README) para habilitar o histórico intradiário.")
 else:
