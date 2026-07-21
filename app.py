@@ -113,17 +113,30 @@ if arquivos_liberados or arquivos_montados:
         st.stop()
 
     agora = pd.Timestamp.now()
-    df_lib_aging = metricas.calcular_aging(df_lib, agora)
+    df_pendentes = metricas.pedidos_nao_montados(df_lib, df_mont)
+    df_lib_aging = metricas.calcular_aging(df_pendentes, agora)
     df_lib_corte = metricas.status_corte(df_lib_aging, st.session_state.corte_config, agora)
-    comparativo = metricas.comparativo_por_estado(df_lib, df_mont)
+    comparativo = metricas.comparativo_por_estado(df_pendentes, df_mont)
 
     st.subheader("2. Panorama deste snapshot")
 
-    st.markdown("**Pendentes (liberados que ainda não foram montados)**")
-    p1, p2, p3 = st.columns(3)
-    p1.metric("Pedidos pendentes", fmt_num(comparativo["pedidos_liberados"].sum()))
-    p2.metric("Peso pendente", fmt_peso(comparativo["peso_liberado"].sum()))
-    p3.metric("Valor pendente", fmt_moeda(comparativo["valor_liberado"].sum()))
+    st.markdown(
+        "**Pendentes por estado** — pedidos liberados que ainda não têm registro em Montados "
+        "(ou seja, ficaram para trás)"
+    )
+    tabela_pendentes = formatar_tabela(
+        comparativo[["estado", "pedidos_pendentes", "peso_pendente", "valor_pendente"]],
+        colunas_moeda=["valor_pendente"],
+        colunas_peso=["peso_pendente"],
+        colunas_num=["pedidos_pendentes"],
+    )
+    total_pendentes = pd.DataFrame([{
+        "estado": "TOTAL",
+        "pedidos_pendentes": fmt_num(comparativo["pedidos_pendentes"].sum()),
+        "peso_pendente": fmt_peso(comparativo["peso_pendente"].sum()),
+        "valor_pendente": fmt_moeda(comparativo["valor_pendente"].sum()),
+    }])
+    st.dataframe(pd.concat([tabela_pendentes, total_pendentes], ignore_index=True), use_container_width=True, hide_index=True)
 
     st.markdown("**Montados e indicadores gerais**")
     c1, c2, c3, c4 = st.columns(4)
@@ -133,7 +146,7 @@ if arquivos_liberados or arquivos_montados:
     c3.metric("Liberados atrasados (passou do corte)", fmt_num(atrasados))
     pct_geral = (
         comparativo["pedidos_montados"].sum()
-        / max(comparativo["pedidos_montados"].sum() + comparativo["pedidos_liberados"].sum(), 1)
+        / max(comparativo["pedidos_montados"].sum() + comparativo["pedidos_pendentes"].sum(), 1)
         * 100
     )
     c4.metric("% já montado (geral)", fmt_pct(pct_geral))
@@ -145,20 +158,20 @@ if arquivos_liberados or arquivos_montados:
     with tab1:
         comparativo_fmt = formatar_tabela(
             comparativo,
-            colunas_moeda=["valor_liberado", "valor_montado"],
-            colunas_peso=["peso_liberado", "peso_montado"],
-            colunas_num=["pedidos_liberados", "pedidos_montados"],
+            colunas_moeda=["valor_pendente", "valor_montado"],
+            colunas_peso=["peso_pendente", "peso_montado"],
+            colunas_num=["pedidos_pendentes", "pedidos_montados"],
             colunas_pct=["pct_montado"],
         )
         st.dataframe(comparativo_fmt, use_container_width=True)
         fig = px.bar(
             comparativo.melt(
                 id_vars="estado",
-                value_vars=["pedidos_liberados", "pedidos_montados"],
+                value_vars=["pedidos_pendentes", "pedidos_montados"],
                 var_name="tipo", value_name="pedidos",
             ),
             x="estado", y="pedidos", color="tipo", barmode="group",
-            title="Pedidos liberados x montados por estado",
+            title="Pedidos pendentes x montados por estado",
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -214,16 +227,16 @@ if arquivos_liberados or arquivos_montados:
             else:
                 fig4 = px.line(
                     historico.sort_values("timestamp"),
-                    x="timestamp", y="pedidos_liberados", color="estado",
-                    title="Evolução do backlog de liberados ao longo do tempo",
+                    x="timestamp", y="pedidos_pendentes", color="estado",
+                    title="Evolução dos pedidos pendentes ao longo do tempo",
                     markers=True,
                 )
                 st.plotly_chart(fig4, use_container_width=True)
                 historico_fmt = formatar_tabela(
                     historico.sort_values("timestamp", ascending=False),
-                    colunas_moeda=["valor_liberado", "valor_montado"],
-                    colunas_peso=["peso_liberado", "peso_montado"],
-                    colunas_num=["pedidos_liberados", "pedidos_montados"],
+                    colunas_moeda=["valor_pendente", "valor_montado"],
+                    colunas_peso=["peso_pendente", "peso_montado"],
+                    colunas_num=["pedidos_pendentes", "pedidos_montados"],
                     colunas_pct=["pct_montado"],
                 )
                 st.dataframe(historico_fmt, use_container_width=True)
