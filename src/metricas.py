@@ -75,7 +75,40 @@ def resumo_montados(df_montados: pd.DataFrame) -> pd.DataFrame:
     return g
 
 
-def comparativo_por_estado(df_pendentes: pd.DataFrame, df_montados: pd.DataFrame) -> pd.DataFrame:
+def tabela_detalhada_por_estado(df_pendentes: pd.DataFrame, df_montados: pd.DataFrame) -> pd.DataFrame:
+    """
+    Tabela organizada por estado, com 3 linhas cada:
+      Montados   -> pedidos, peso, valor
+      Liberados  -> pedidos, peso, valor  (pendentes reais, que ainda não foram montados)
+      TOTAL      -> soma das duas
+    """
+    pend = resumo_pendentes(df_pendentes).rename(
+        columns={"pedidos_pendentes": "pedidos", "peso_pendente": "peso", "valor_pendente": "valor"}
+    )
+    mont = resumo_montados(df_montados).rename(
+        columns={"pedidos_montados": "pedidos", "peso_montado": "peso", "valor_montado": "valor"}
+    )
+
+    todos_estados = sorted(set(pend["estado"]).union(set(mont["estado"])))
+    linhas = []
+    for estado in todos_estados:
+        lp = pend[pend["estado"] == estado]
+        lm = mont[mont["estado"] == estado]
+        p_pedidos = float(lp["pedidos"].sum()) if not lp.empty else 0.0
+        p_peso = float(lp["peso"].sum()) if not lp.empty else 0.0
+        p_valor = float(lp["valor"].sum()) if not lp.empty else 0.0
+        m_pedidos = float(lm["pedidos"].sum()) if not lm.empty else 0.0
+        m_peso = float(lm["peso"].sum()) if not lm.empty else 0.0
+        m_valor = float(lm["valor"].sum()) if not lm.empty else 0.0
+
+        linhas.append({"estado": estado, "categoria": "Montados", "pedidos": m_pedidos, "peso": m_peso, "valor": m_valor})
+        linhas.append({"estado": estado, "categoria": "Liberados (pendentes)", "pedidos": p_pedidos, "peso": p_peso, "valor": p_valor})
+        linhas.append({"estado": estado, "categoria": "TOTAL", "pedidos": m_pedidos + p_pedidos, "peso": m_peso + p_peso, "valor": m_valor + p_valor})
+
+    return pd.DataFrame(linhas)
+
+
+
     """Uma linha por estado: pendentes reais x montados lado a lado + % já montado."""
     bl = resumo_pendentes(df_pendentes)
     mt = resumo_montados(df_montados)

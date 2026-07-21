@@ -76,12 +76,19 @@ COLUNAS_MONTADOS_ESPERADAS = {
 }
 
 
-def normalizar_liberados(df: pd.DataFrame, estado: str) -> pd.DataFrame:
+def normalizar_liberados(df: pd.DataFrame, estado: str) -> tuple[pd.DataFrame, int]:
     faltando = COLUNAS_LIBERADOS_ESPERADAS - set(df.columns)
     if faltando:
         raise ValueError(
             f"Arquivo de Liberados ({estado}) não tem as colunas esperadas: {sorted(faltando)}"
         )
+
+    # Algumas extrações vêm com uma linha de RODAPÉ/TOTAL no final (soma de peso/valor
+    # de todas as linhas). Essa linha não tem cliente nem data, só os totais — se não for
+    # removida, ela é somada junto com os pedidos de verdade e dobra peso/valor.
+    linhas_antes = len(df)
+    df = df[df["NOMECLIENTE"].notna() & df["CODCLI"].notna()].copy()
+    n_removidas = linhas_antes - len(df)
 
     out = pd.DataFrame()
     out["numero_pedido"] = df["NUMPED"].apply(parse_numero_pedido)
@@ -105,15 +112,21 @@ def normalizar_liberados(df: pd.DataFrame, estado: str) -> pd.DataFrame:
     out["estado"] = estado
     out["origem"] = "liberado"
     out = out.dropna(subset=["numero_pedido"]).reset_index(drop=True)
-    return out
+    return out, n_removidas
 
 
-def normalizar_montados(df: pd.DataFrame, estado: str) -> pd.DataFrame:
+def normalizar_montados(df: pd.DataFrame, estado: str) -> tuple[pd.DataFrame, int]:
     faltando = COLUNAS_MONTADOS_ESPERADAS - set(df.columns)
     if faltando:
         raise ValueError(
             f"Arquivo de Montados ({estado}) não tem as colunas esperadas: {sorted(faltando)}"
         )
+
+    # Mesmo cuidado do lado de Montados: linha de rodapé/total sem cliente.
+    linhas_antes = len(df)
+    cliente_valido = df["Cliente"].notna() & (df["Cliente"].astype(str).str.strip() != "")
+    df = df[cliente_valido].copy()
+    n_removidas = linhas_antes - len(df)
 
     out = pd.DataFrame()
     out["numero_pedido"] = df["Número do pedido"].apply(parse_numero_pedido)
@@ -130,7 +143,7 @@ def normalizar_montados(df: pd.DataFrame, estado: str) -> pd.DataFrame:
     out["estado"] = estado
     out["origem"] = "montado"
     out = out.dropna(subset=["numero_pedido"]).reset_index(drop=True)
-    return out
+    return out, n_removidas
 
 
 # ---------------------------------------------------------------------------
@@ -140,15 +153,31 @@ def normalizar_montados(df: pd.DataFrame, estado: str) -> pd.DataFrame:
 def montar_snapshot(arquivos_liberados: dict, arquivos_montados: dict):
     """
     arquivos_liberados / arquivos_montados: dict {estado: DataFrame já lido do excel}
-    Retorna (df_liberados_consolidado, df_montados_consolidado)
+    Retorna (df_liberados_consolidado, df_montados_consolidado, avisos)
+    onde 'avisos' é uma lista de strings sobre linhas de rodapé/total removidas.
     """
     libs = []
-    for estado, df in arquivos_liberados.items():
-        libs.append(normalizar_liberados(df, estado))
     montados = []
+    avisos = []
+
+    for estado, df in arquivos_liberados.items():
+        norm, n_removidas = normalizar_liberados(df, estado)
+        libs.append(norm)
+        if n_removidas:
+            avisos.append(
+                f"Liberados ({estado}): {n_removidas} linha(s) de rodapé/total detectada(s) "
+                f"e removida(s) automaticamente (sem cliente/código de cliente)."
+            )
+
     for estado, df in arquivos_montados.items():
-        montados.append(normalizar_montados(df, estado))
+        norm, n_removidas = normalizar_montados(df, estado)
+        montados.append(norm)
+        if n_removidas:
+            avisos.append(
+                f"Montados ({estado}): {n_removidas} linha(s) de rodapé/total detectada(s) "
+                f"e removida(s) automaticamente (sem cliente)."
+            )
 
     df_lib = pd.concat(libs, ignore_index=True) if libs else pd.DataFrame()
     df_mont = pd.concat(montados, ignore_index=True) if montados else pd.DataFrame()
-    return df_lib, df_mont
+    return df_lib, df_mont, avisos
