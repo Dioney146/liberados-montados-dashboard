@@ -108,7 +108,7 @@ def tabela_detalhada_por_estado(df_pendentes: pd.DataFrame, df_montados: pd.Data
     return pd.DataFrame(linhas)
 
 
-
+def comparativo_por_estado(df_pendentes: pd.DataFrame, df_montados: pd.DataFrame) -> pd.DataFrame:
     """Uma linha por estado: pendentes reais x montados lado a lado + % já montado."""
     bl = resumo_pendentes(df_pendentes)
     mt = resumo_montados(df_montados)
