@@ -68,7 +68,8 @@ _LINHA_ZEBRA_B = "background-color:#f2faf5;"
 
 
 def estilizar_tabela_estado(df: pd.DataFrame):
-    """Aplica cor por categoria (Montados / Liberados / TOTAL) numa tabela de estado."""
+    """Aplica cor por categoria (Montados / Liberados / TOTAL) numa tabela de estado,
+    com texto centralizado e espaçamento maior — pensado pra ficar legível em print."""
 
     def cor_linha(row):
         cat = str(row.get("categoria", ""))
@@ -85,14 +86,18 @@ def estilizar_tabela_estado(df: pd.DataFrame):
     return (
         df.style
         .apply(cor_linha, axis=1)
+        .set_properties(**{"text-align": "center", "font-size": "15px", "padding": "10px 14px"})
         .set_table_styles([
-            {"selector": "th", "props": "background-color:#2f9e5c; color:white; font-weight:600;"},
+            {"selector": "th", "props": "background-color:#2f9e5c; color:white; font-weight:600; "
+                                          "text-align:center; font-size:15px; padding:10px 14px;"},
+            {"selector": "td, th", "props": "border:1px solid #d7ede1;"},
         ])
     )
 
 
 def estilizar_tabela_zebra(df: pd.DataFrame):
-    """Listrado leve (branco/verde bem claro) pra tabelas genéricas (histórico, aging, atrasados)."""
+    """Listrado leve (branco/verde bem claro) pra tabelas genéricas (histórico, aging, atrasados),
+    também centralizado e com espaçamento maior."""
     df = df.reset_index(drop=True)
 
     def cor_linha(row):
@@ -103,7 +108,27 @@ def estilizar_tabela_zebra(df: pd.DataFrame):
     return (
         df.style
         .apply(cor_linha, axis=1)
+        .set_properties(**{"text-align": "center", "font-size": "14px", "padding": "8px 12px"})
         .set_table_styles([
-            {"selector": "th", "props": "background-color:#2f9e5c; color:white; font-weight:600;"},
+            {"selector": "th", "props": "background-color:#2f9e5c; color:white; font-weight:600; "
+                                          "text-align:center; font-size:14px; padding:8px 12px;"},
+            {"selector": "td, th", "props": "border:1px solid #d7ede1;"},
         ])
     )
+
+
+def legenda_cores_estado():
+    """HTML de uma legenda pequena explicando o significado das cores das tabelas de estado."""
+    itens = [
+        (_VERDE_MONTADOS.split(";")[0].split(":")[1], "Montados"),
+        (_VERDE_LIBERADOS.split(";")[0].split(":")[1], "Liberados (pendentes)"),
+        (_VERDE_TOTAL.split(";")[0].split(":")[1], "TOTAL"),
+    ]
+    blocos = "".join(
+        f"<span style='display:inline-flex; align-items:center; margin-right:18px;'>"
+        f"<span style='width:14px; height:14px; background:{cor}; border:1px solid #bbb; "
+        f"border-radius:3px; display:inline-block; margin-right:6px;'></span>"
+        f"<span style='font-size:13px; color:#333;'>{nome}</span></span>"
+        for cor, nome in itens
+    )
+    return f"<div style='margin:6px 0 14px 0;'>{blocos}</div>"
