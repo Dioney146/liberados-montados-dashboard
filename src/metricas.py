@@ -20,7 +20,38 @@ FAIXAS_AGING = [
 ]
 
 
-def resumo_backlog(df_liberados: pd.DataFrame) -> pd.DataFrame:
+def pedidos_nao_montados(df_liberados: pd.DataFrame, df_montados: pd.DataFrame) -> pd.DataFrame:
+    """
+    Retorna só os pedidos liberados que NÃO aparecem no arquivo de montados
+    (cruzando por estado + numero_pedido). São os que realmente ficaram
+    pendentes/pra trás — o arquivo de Liberados pode trazer também pedidos
+    que já foram montados, então não dá pra tratar tudo que está lá como pendência.
+    """
+    if df_liberados.empty:
+        return df_liberados.copy()
+    if df_montados.empty:
+        return df_liberados.copy()
+
+    chave_montados = df_montados[["estado", "numero_pedido"]].drop_duplicates().copy()
+    chave_montados["_montado"] = True
+    merged = df_liberados.merge(chave_montados, on=["estado", "numero_pedido"], how="left")
+    pendentes = merged[merged["_montado"].isna()].drop(columns=["_montado"])
+    return pendentes.reset_index(drop=True)
+
+
+def resumo_pendentes(df_pendentes: pd.DataFrame) -> pd.DataFrame:
+    """Total de pedidos, peso e valor realmente pendentes (não montados ainda) por estado."""
+    if df_pendentes.empty:
+        return pd.DataFrame(columns=["estado", "pedidos_pendentes", "peso_pendente", "valor_pendente"])
+    g = df_pendentes.groupby("estado").agg(
+        pedidos_pendentes=("numero_pedido", "nunique"),
+        peso_pendente=("peso", "sum"),
+        valor_pendente=("valor", "sum"),
+    ).reset_index()
+    return g
+
+
+
     """Total de pedidos, peso e valor pendentes (liberados) por estado."""
     if df_liberados.empty:
         return pd.DataFrame(columns=["estado", "pedidos_liberados", "peso_liberado", "valor_liberado"])
@@ -44,12 +75,12 @@ def resumo_montados(df_montados: pd.DataFrame) -> pd.DataFrame:
     return g
 
 
-def comparativo_por_estado(df_liberados: pd.DataFrame, df_montados: pd.DataFrame) -> pd.DataFrame:
-    """Uma linha por estado: liberados x montados lado a lado + % já montado."""
-    bl = resumo_backlog(df_liberados)
+def comparativo_por_estado(df_pendentes: pd.DataFrame, df_montados: pd.DataFrame) -> pd.DataFrame:
+    """Uma linha por estado: pendentes reais x montados lado a lado + % já montado."""
+    bl = resumo_pendentes(df_pendentes)
     mt = resumo_montados(df_montados)
     comp = pd.merge(bl, mt, on="estado", how="outer").fillna(0)
-    total = comp["pedidos_liberados"] + comp["pedidos_montados"]
+    total = comp["pedidos_pendentes"] + comp["pedidos_montados"]
     comp["pct_montado"] = np.where(total > 0, comp["pedidos_montados"] / total * 100, 0)
     return comp.sort_values("estado").reset_index(drop=True)
 

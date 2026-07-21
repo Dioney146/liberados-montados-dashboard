@@ -15,7 +15,7 @@ ABA_HISTORICO = "HISTORICO"
 ABA_CONFIG = "CONFIG_CORTE"
 
 COLUNAS_HISTORICO = [
-    "timestamp", "estado", "pedidos_liberados", "peso_liberado", "valor_liberado",
+    "timestamp", "estado", "pedidos_pendentes", "peso_pendente", "valor_pendente",
     "pedidos_montados", "peso_montado", "valor_montado", "pct_montado",
 ]
 
@@ -61,9 +61,9 @@ def salvar_snapshot(df_comparativo: pd.DataFrame, timestamp: pd.Timestamp):
         linhas.append([
             timestamp.isoformat(),
             row["estado"],
-            int(row.get("pedidos_liberados", 0)),
-            float(row.get("peso_liberado", 0)),
-            float(row.get("valor_liberado", 0)),
+            int(row.get("pedidos_pendentes", 0)),
+            float(row.get("peso_pendente", 0)),
+            float(row.get("valor_pendente", 0)),
             int(row.get("pedidos_montados", 0)),
             float(row.get("peso_montado", 0)),
             float(row.get("valor_montado", 0)),
