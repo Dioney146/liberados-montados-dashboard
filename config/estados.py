@@ -15,7 +15,7 @@ ESTADOS = {
     "DF": "Distrito Federal",
     "MG_ES": "Minas Gerais / Espírito Santo",
     "SP": "São Paulo",
-    "SP_WFS": "São Paulo (WFS)",
+    "SP_WFS": "SP (WFOOD)",
 }
 
 # Configuração padrão de corte por estado.
