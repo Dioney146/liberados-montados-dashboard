@@ -5,7 +5,7 @@ import plotly.express as px
 from config.estados import ESTADOS, CORTE_PADRAO, detectar_estado, detectar_tipo
 from src.etl import ler_excel, montar_snapshot
 from src import metricas
-from src.formato import fmt_moeda, fmt_peso, fmt_num, fmt_pct, formatar_tabela
+from src.formato import fmt_moeda, fmt_peso, fmt_num, fmt_pct, formatar_tabela, estilizar_tabela_estado, estilizar_tabela_zebra
 
 st.set_page_config(page_title="Liberados x Montados", layout="wide")
 
@@ -147,8 +147,13 @@ if arquivos_liberados or arquivos_montados:
             bloco_fmt = formatar_tabela(
                 bloco, colunas_moeda=["valor"], colunas_peso=["peso"], colunas_num=["pedidos"],
             )
-            st.markdown(f"###### {ESTADOS.get(estado, estado)} ({estado})")
-            st.dataframe(bloco_fmt, use_container_width=True, hide_index=True)
+            st.markdown(
+                f"<div style='background:#2f9e5c; color:white; padding:6px 12px; "
+                f"border-radius:6px; font-weight:600; margin-top:14px; margin-bottom:4px;'>"
+                f"{ESTADOS.get(estado, estado)} ({estado})</div>",
+                unsafe_allow_html=True,
+            )
+            st.dataframe(estilizar_tabela_estado(bloco_fmt), use_container_width=True, hide_index=True)
 
         fig = px.bar(
             comparativo.melt(
@@ -180,7 +185,7 @@ if arquivos_liberados or arquivos_montados:
                 tabela_aging, colunas_moeda=["valor"], colunas_peso=["peso"],
             )
             tabela_aging["idade_horas"] = tabela_aging["idade_horas"].round(1)
-            st.dataframe(tabela_aging, use_container_width=True)
+            st.dataframe(estilizar_tabela_zebra(tabela_aging), use_container_width=True, hide_index=True)
 
     with tab3:
         if df_lib_corte.empty:
@@ -199,7 +204,7 @@ if arquivos_liberados or arquivos_montados:
                 tabela_atrasados, colunas_moeda=["valor"], colunas_peso=["peso"],
             )
             tabela_atrasados["idade_horas"] = tabela_atrasados["idade_horas"].round(1)
-            st.dataframe(tabela_atrasados, use_container_width=True)
+            st.dataframe(estilizar_tabela_zebra(tabela_atrasados), use_container_width=True, hide_index=True)
 
     with tab4:
         if GSHEETS_OK:
@@ -225,7 +230,7 @@ if arquivos_liberados or arquivos_montados:
                     colunas_num=["pedidos_pendentes", "pedidos_montados"],
                     colunas_pct=["pct_montado"],
                 )
-                st.dataframe(historico_fmt, use_container_width=True)
+                st.dataframe(estilizar_tabela_zebra(historico_fmt), use_container_width=True, hide_index=True)
         else:
             st.info("Configure o Google Sheets (veja o README) para habilitar o histórico intradiário.")
 else:
