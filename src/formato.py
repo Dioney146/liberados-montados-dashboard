@@ -54,3 +54,56 @@ def formatar_tabela(df: pd.DataFrame, colunas_moeda=(), colunas_peso=(), colunas
         if c in out.columns:
             out[c] = out[c].apply(fmt_pct)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Estilização visual (tema verde/claro) para as tabelas do app
+# ---------------------------------------------------------------------------
+
+_VERDE_TOTAL = "background-color:#bfead0; color:#0b3d24; font-weight:700;"
+_VERDE_MONTADOS = "background-color:#e4f8ec; color:#0f5132;"
+_VERDE_LIBERADOS = "background-color:#f4fcf7; color:#2f6b46;"
+_LINHA_ZEBRA_A = "background-color:#ffffff;"
+_LINHA_ZEBRA_B = "background-color:#f2faf5;"
+
+
+def estilizar_tabela_estado(df: pd.DataFrame):
+    """Aplica cor por categoria (Montados / Liberados / TOTAL) numa tabela de estado."""
+
+    def cor_linha(row):
+        cat = str(row.get("categoria", ""))
+        if cat == "TOTAL":
+            estilo = _VERDE_TOTAL
+        elif cat == "Montados":
+            estilo = _VERDE_MONTADOS
+        elif cat.startswith("Liberados"):
+            estilo = _VERDE_LIBERADOS
+        else:
+            estilo = ""
+        return [estilo] * len(row)
+
+    return (
+        df.style
+        .apply(cor_linha, axis=1)
+        .set_table_styles([
+            {"selector": "th", "props": "background-color:#2f9e5c; color:white; font-weight:600;"},
+        ])
+    )
+
+
+def estilizar_tabela_zebra(df: pd.DataFrame):
+    """Listrado leve (branco/verde bem claro) pra tabelas genéricas (histórico, aging, atrasados)."""
+    df = df.reset_index(drop=True)
+
+    def cor_linha(row):
+        idx = row.name if isinstance(row.name, int) else 0
+        estilo = _LINHA_ZEBRA_A if idx % 2 == 0 else _LINHA_ZEBRA_B
+        return [estilo] * len(row)
+
+    return (
+        df.style
+        .apply(cor_linha, axis=1)
+        .set_table_styles([
+            {"selector": "th", "props": "background-color:#2f9e5c; color:white; font-weight:600;"},
+        ])
+    )
