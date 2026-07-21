@@ -107,41 +107,26 @@ if uploads:
 # ---------------------------------------------------------------------------
 if arquivos_liberados or arquivos_montados:
     try:
-        df_lib, df_mont = montar_snapshot(arquivos_liberados, arquivos_montados)
+        df_lib, df_mont, avisos = montar_snapshot(arquivos_liberados, arquivos_montados)
     except ValueError as e:
         st.error(str(e))
         st.stop()
+
+    for aviso in avisos:
+        st.warning(f"⚠️ {aviso}", icon="⚠️")
 
     agora = pd.Timestamp.now()
     df_pendentes = metricas.pedidos_nao_montados(df_lib, df_mont)
     df_lib_aging = metricas.calcular_aging(df_pendentes, agora)
     df_lib_corte = metricas.status_corte(df_lib_aging, st.session_state.corte_config, agora)
     comparativo = metricas.comparativo_por_estado(df_pendentes, df_mont)
+    tabela_estado = metricas.tabela_detalhada_por_estado(df_pendentes, df_mont)
 
     st.subheader("2. Panorama deste snapshot")
 
-    st.markdown(
-        "**Pendentes por estado** — pedidos liberados que ainda não têm registro em Montados "
-        "(ou seja, ficaram para trás)"
-    )
-    tabela_pendentes = formatar_tabela(
-        comparativo[["estado", "pedidos_pendentes", "peso_pendente", "valor_pendente"]],
-        colunas_moeda=["valor_pendente"],
-        colunas_peso=["peso_pendente"],
-        colunas_num=["pedidos_pendentes"],
-    )
-    total_pendentes = pd.DataFrame([{
-        "estado": "TOTAL",
-        "pedidos_pendentes": fmt_num(comparativo["pedidos_pendentes"].sum()),
-        "peso_pendente": fmt_peso(comparativo["peso_pendente"].sum()),
-        "valor_pendente": fmt_moeda(comparativo["valor_pendente"].sum()),
-    }])
-    st.dataframe(pd.concat([tabela_pendentes, total_pendentes], ignore_index=True), use_container_width=True, hide_index=True)
-
-    st.markdown("**Montados e indicadores gerais**")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Pedidos montados", fmt_num(comparativo["pedidos_montados"].sum()))
-    c2.metric("Valor montado", fmt_moeda(comparativo["valor_montado"].sum()))
+    c1.metric("Pedidos pendentes", fmt_num(comparativo["pedidos_pendentes"].sum()))
+    c2.metric("Pedidos montados", fmt_num(comparativo["pedidos_montados"].sum()))
     atrasados = (df_lib_corte["status_corte"] == "atrasado").sum() if not df_lib_corte.empty else 0
     c3.metric("Liberados atrasados (passou do corte)", fmt_num(atrasados))
     pct_geral = (
@@ -156,14 +141,15 @@ if arquivos_liberados or arquivos_montados:
     )
 
     with tab1:
-        comparativo_fmt = formatar_tabela(
-            comparativo,
-            colunas_moeda=["valor_pendente", "valor_montado"],
-            colunas_peso=["peso_pendente", "peso_montado"],
-            colunas_num=["pedidos_pendentes", "pedidos_montados"],
-            colunas_pct=["pct_montado"],
-        )
-        st.dataframe(comparativo_fmt, use_container_width=True)
+        st.markdown("**Montados x Liberados x Total, por estado**")
+        for estado in tabela_estado["estado"].unique():
+            bloco = tabela_estado[tabela_estado["estado"] == estado].drop(columns="estado")
+            bloco_fmt = formatar_tabela(
+                bloco, colunas_moeda=["valor"], colunas_peso=["peso"], colunas_num=["pedidos"],
+            )
+            st.markdown(f"###### {ESTADOS.get(estado, estado)} ({estado})")
+            st.dataframe(bloco_fmt, use_container_width=True, hide_index=True)
+
         fig = px.bar(
             comparativo.melt(
                 id_vars="estado",
