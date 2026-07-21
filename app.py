@@ -1,16 +1,17 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import streamlit.components.v1 as components
 
 from config.estados import ESTADOS, CORTE_PADRAO, detectar_estado, detectar_tipo
 from src.etl import ler_excel, montar_snapshot
 from src import metricas
-from src.formato import (
-    fmt_moeda, fmt_peso, fmt_num, fmt_pct, formatar_tabela,
-    estilizar_tabela_estado, estilizar_tabela_zebra, legenda_cores_estado,
-)
+from src.formato import fmt_num, fmt_pct, formatar_tabela
+from src.datagrid import render_datagrid
+from src.tema import CSS_FUNDO_FUTURISTA
 
 st.set_page_config(page_title="Liberados x Montados", layout="wide")
+st.markdown(CSS_FUNDO_FUTURISTA, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Google Sheets é opcional: se não estiver configurado em st.secrets, o app
@@ -50,7 +51,7 @@ with st.sidebar:
         if tem_corte:
             hora_default = cfg.get("hora_corte") or "14:00"
             hora_corte = st.text_input(
-                f"Horário de corte ({estado})", value=hora_default, key=f"hora_{estado}",
+                f"Horário de corte ({nome})", value=hora_default, key=f"hora_{estado}",
                 help="Formato HH:MM"
             )
         novo_config[estado] = {"tem_corte": tem_corte, "hora_corte": hora_corte}
@@ -87,7 +88,7 @@ if uploads:
                 "Estado", list(ESTADOS.keys()),
                 index=list(ESTADOS.keys()).index(estado_sugerido),
                 key=f"estado_{f.name}",
-                format_func=lambda e: f"{e} - {ESTADOS[e]}",
+                format_func=lambda e: ESTADOS[e],
             )
         with col3:
             tipo_escolhido = st.selectbox(
@@ -143,9 +144,17 @@ if arquivos_liberados or arquivos_montados:
         ["Comparativo por estado", "Aging dos pendentes", "Status de corte", "Histórico do dia"]
     )
 
+    # -----------------------------------------------------------------------
     with tab1:
-        st.markdown("### 📊 Montados x Liberados x Total, por estado")
-        st.markdown(legenda_cores_estado(), unsafe_allow_html=True)
+        st.markdown("#### 📊 Montados x Liberados x Total, por estado")
+        st.markdown(
+            "<div style='display:flex; gap:18px; margin:4px 0 16px 0; font-size:13px; color:#2f6b46;'>"
+            "<span>🟩 <b>Montados</b></span>"
+            "<span>🟢 <b>Liberados</b> (pendentes)</span>"
+            "<span>🟦 <b>TOTAL</b></span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
         estados_lista = list(tabela_estado["estado"].unique())
         for i in range(0, len(estados_lista), 2):
@@ -157,16 +166,11 @@ if arquivos_liberados or arquivos_montados:
                     bloco_fmt = formatar_tabela(
                         bloco, colunas_moeda=["valor"], colunas_peso=["peso"], colunas_num=["pedidos"],
                     )
-                    st.markdown(
-                        f"<div style='background:#2f9e5c; color:white; padding:8px 12px; "
-                        f"border-radius:6px 6px 0 0; font-weight:700; text-align:center; "
-                        f"font-size:15px;'>{ESTADOS.get(estado, estado)} ({estado})</div>",
-                        unsafe_allow_html=True,
+                    grid_html, altura = render_datagrid(
+                        bloco_fmt, key=f"estado_{estado}", titulo=ESTADOS.get(estado, estado),
+                        altura_max=160, linhas_por_pagina=3, colorir_categoria=True,
                     )
-                    st.dataframe(
-                        estilizar_tabela_estado(bloco_fmt),
-                        use_container_width=True, hide_index=True,
-                    )
+                    components.html(grid_html, height=altura, scrolling=False)
 
         st.markdown("<br>", unsafe_allow_html=True)
         fig = px.bar(
@@ -180,6 +184,7 @@ if arquivos_liberados or arquivos_montados:
         )
         st.plotly_chart(fig, use_container_width=True)
 
+    # -----------------------------------------------------------------------
     with tab2:
         if df_lib_aging.empty:
             st.info("Sem pedidos liberados neste snapshot.")
@@ -195,12 +200,14 @@ if arquivos_liberados or arquivos_montados:
                 "numero_pedido", "estado", "cliente", "cidade", "data_hora_liberacao",
                 "idade_horas", "faixa_aging", "peso", "valor",
             ]].sort_values("idade_horas", ascending=False)
-            tabela_aging = formatar_tabela(
-                tabela_aging, colunas_moeda=["valor"], colunas_peso=["peso"],
-            )
+            tabela_aging = formatar_tabela(tabela_aging, colunas_moeda=["valor"], colunas_peso=["peso"])
             tabela_aging["idade_horas"] = tabela_aging["idade_horas"].round(1)
-            st.dataframe(estilizar_tabela_zebra(tabela_aging), use_container_width=True, hide_index=True)
+            grid_html, altura = render_datagrid(
+                tabela_aging, key="aging", altura_max=420, linhas_por_pagina=10,
+            )
+            components.html(grid_html, height=altura, scrolling=False)
 
+    # -----------------------------------------------------------------------
     with tab3:
         if df_lib_corte.empty:
             st.info("Sem pedidos liberados neste snapshot.")
@@ -214,12 +221,14 @@ if arquivos_liberados or arquivos_montados:
                 "numero_pedido", "estado", "cliente", "cidade", "data_hora_liberacao",
                 "idade_horas", "peso", "valor",
             ]]
-            tabela_atrasados = formatar_tabela(
-                tabela_atrasados, colunas_moeda=["valor"], colunas_peso=["peso"],
-            )
+            tabela_atrasados = formatar_tabela(tabela_atrasados, colunas_moeda=["valor"], colunas_peso=["peso"])
             tabela_atrasados["idade_horas"] = tabela_atrasados["idade_horas"].round(1)
-            st.dataframe(estilizar_tabela_zebra(tabela_atrasados), use_container_width=True, hide_index=True)
+            grid_html, altura = render_datagrid(
+                tabela_atrasados, key="atrasados", altura_max=420, linhas_por_pagina=10,
+            )
+            components.html(grid_html, height=altura, scrolling=False)
 
+    # -----------------------------------------------------------------------
     with tab4:
         if GSHEETS_OK:
             if st.button("💾 Salvar este snapshot no histórico"):
@@ -244,7 +253,10 @@ if arquivos_liberados or arquivos_montados:
                     colunas_num=["pedidos_pendentes", "pedidos_montados"],
                     colunas_pct=["pct_montado"],
                 )
-                st.dataframe(estilizar_tabela_zebra(historico_fmt), use_container_width=True, hide_index=True)
+                grid_html, altura = render_datagrid(
+                    historico_fmt, key="historico", altura_max=420, linhas_por_pagina=10,
+                )
+                components.html(grid_html, height=altura, scrolling=False)
         else:
             st.info("Configure o Google Sheets (veja o README) para habilitar o histórico intradiário.")
 else:
